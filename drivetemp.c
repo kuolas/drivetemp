@@ -197,7 +197,8 @@ static int drivetemp_scsi_command(struct drivetemp_data *st,
 				NULL);
 }
 
-static int drivetemp_ata_command(struct drivetemp_data *st, u8 feature, u8 select)
+static int drivetemp_ata_command(struct drivetemp_data *st, u8 feature,
+				 u8 select)
 {
 	return drivetemp_scsi_command(st, ATA_CMD_SMART, feature, select,
 				     ATA_SMART_LBAM_PASS, ATA_SMART_LBAH_PASS);
@@ -263,12 +264,18 @@ static int drivetemp_get_scttemp(struct drivetemp_data *st, u32 attr, long *val)
 		return err;
 	switch (attr) {
 	case hwmon_temp_input:
+		if (!temp_is_valid(buf[SCT_STATUS_TEMP]))
+			return -ENODATA;
 		*val = temp_from_sct(buf[SCT_STATUS_TEMP]);
 		break;
 	case hwmon_temp_lowest:
+		if (!temp_is_valid(buf[SCT_STATUS_TEMP_LOWEST]))
+			return -ENODATA;
 		*val = temp_from_sct(buf[SCT_STATUS_TEMP_LOWEST]);
 		break;
 	case hwmon_temp_highest:
+		if (!temp_is_valid(buf[SCT_STATUS_TEMP_HIGHEST]))
+			return -ENODATA;
 		*val = temp_from_sct(buf[SCT_STATUS_TEMP_HIGHEST]);
 		break;
 	default:
@@ -339,7 +346,7 @@ static int drivetemp_identify_sata(struct drivetemp_data *st)
 	st->have_temp_highest = temp_is_valid(buf[SCT_STATUS_TEMP_HIGHEST]);
 
 	if (!have_sct_data_table)
-		goto skip_sct;
+		goto skip_sct_data;
 
 	/* Request and read temperature history table */
 	memset(buf, '\0', sizeof(st->smartdata));
@@ -393,10 +400,7 @@ static int drivetemp_identify(struct drivetemp_data *st)
 	if (sdev->type != TYPE_DISK && sdev->type != TYPE_ZBC)
 		return -ENODEV;
 
-	if (!drivetemp_identify_sata(st))
-		return 0;
-
-	return -ENODEV;
+	return drivetemp_identify_sata(st);
 }
 
 static int drivetemp_read(struct device *dev, enum hwmon_sensor_types type,
